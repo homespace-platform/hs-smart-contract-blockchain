@@ -28,6 +28,8 @@ Chạy theo thứ tự, dùng PowerShell tại thư mục `hs-smart-contract-blo
 1. [Deploy lên Sepolia](DEPLOY.md): kiểm tra local, cấu hình `ACCOUNT`, deploy và verify source trên Etherscan.
 2. [Test sau khi deploy](POST_DEPLOY_TEST.md): kiểm tra bytecode/owner, ghi hash PDF và kiểm tra kết quả đúng/sai.
 
+Hai tài liệu có bảng đối chiếu từng lệnh CLI với constructor/hàm Solidity, comment trong khối PowerShell, kết quả mong đợi và cách đọc lỗi/receipt. Tài liệu test giải thích cả getter `documents()` tự sinh và `owner()` kế thừa từ OpenZeppelin, kèm cách lưu proof để mở terminal mới kiểm tra lại.
+
 Các lệnh `cast send` trong bài test gửi transaction và tốn Sepolia ETH. Các lệnh `cast code`/`cast call` chỉ đọc, không tốn gas.
 
 ## Quyền ghi và giới hạn
