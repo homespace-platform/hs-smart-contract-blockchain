@@ -47,24 +47,24 @@ Ví owner và contract là hai địa chỉ khác nhau. Mỗi lần deploy tạo
 
 Mở PowerShell tại repo đã có, không chạy lại `forge init`:
 
+Chạy chung khối kiểm tra local: xem phiên bản, build, test và format. Chưa deploy hoặc gửi transaction.
+
 ```powershell
-# Chọn repo chứa foundry.toml; các đường dẫn bên dưới tính từ đây.
+# Chạy khối này sau khi đọc hướng dẫn phía trên
 Set-Location D:\Workspace\homespace\hs-smart-contract-blockchain
-# Xem phiên bản công cụ, không kết nối blockchain.
 forge --version
 cast --version
-# Biên dịch source thành ABI và bytecode; chưa deploy.
 forge build
-# Chạy unit/fuzz tests trong EVM local; không tốn Sepolia ETH.
 forge test -vv
-# Chỉ kiểm tra format, không tự sửa source.
 forge fmt --check
 ```
 
 Cấu hình giữ nguyên: Solidity `0.8.30`, EVM `cancun`, optimizer `200`. `foundry.lock` pin `forge-std v1.17.0` và `openzeppelin-contracts v5.7.0`. Chỉ khi clone mới và **thiếu** thư viện trong `lib/`, cài trước khi build:
 
+Chỉ chạy chung hai lệnh cài dependency nếu thiếu thư viện; tên repository và tag xác định phiên bản, --no-git không tạo submodule.
+
 ```powershell
-# Chỉ chạy khi thiếu source thư viện; không gọi Solidity hoặc deploy.
+# Chạy khối này sau khi đọc hướng dẫn phía trên
 forge install foundry-rs/forge-std@v1.17.0 --no-git
 forge install OpenZeppelin/openzeppelin-contracts@v5.7.0 --no-git
 ```
@@ -73,8 +73,10 @@ Repo giữ thư viện dưới `lib/` dạng source local được gitignore; d�
 
 Nếu gặp `lib/forge-std already exists and is not a valid git repo`, kiểm tra source thay vì cài lại:
 
+Chạy chung hai lệnh kiểm tra file; mỗi True nghĩa là source dependency tương ứng đã có.
+
 ```powershell
-# Chỉ kiểm tra file tồn tại trên máy, True nghĩa là có file.
+# Chạy khối này sau khi đọc hướng dẫn phía trên
 Test-Path -LiteralPath lib/forge-std/src/Test.sol
 Test-Path -LiteralPath lib/openzeppelin-contracts/contracts/access/Ownable2Step.sol
 ```
@@ -89,16 +91,19 @@ Chuẩn bị ví testnet riêng có Sepolia ETH trả gas, endpoint **Ethereum S
 
 Giống crowdfunding, import ví bằng prompt tương tác vào keystore mã hóa. Nếu đã có account `sepoliaKey`, bỏ qua:
 
+Chạy riêng khi alias chưa có. wallet import nhận tên sepoliaKey; --interactive yêu cầu nhập private key và mật khẩu qua prompt. Không gọi Solidity.
+
 ```powershell
-# Chỉ import nếu alias chưa có; nhập private key/mật khẩu ở prompt.
-# Không gửi transaction và không gọi hàm contract.
+# Chạy khối này sau khi đọc hướng dẫn phía trên
 cast wallet import sepoliaKey --interactive
 ```
 
 Nếu Cast báo `Keystore file already exists .../sepoliaKey`, account đã tồn tại: không import lại hoặc ghi đè. Dùng account hiện có để lấy địa chỉ public:
 
+Chạy riêng để lấy địa chỉ public từ alias sepoliaKey. Đây là thao tác keystore trên máy, không gọi owner() của registry.
+
 ```powershell
-# Lấy địa chỉ public của ví đã import; chưa gọi owner() của contract.
+# Chạy khối này sau khi đọc hướng dẫn phía trên
 cast wallet address --account sepoliaKey
 ```
 
@@ -106,8 +111,10 @@ Nhập mật khẩu keystore khi được hỏi. Nếu không nhớ mật khẩu
 
 Chỉ nhập private key tại prompt của Cast; không đặt key trong `.env`, source hoặc lệnh CLI. Không commit keystore.
 
+Chạy chung để tạo .env nếu thiếu và mở editor. Lưu file, đóng editor rồi mới sang bước nạp cấu hình.
+
 ```powershell
-# Tạo file cấu hình nếu thiếu, giữ nguyên nếu đã có.
+# Chạy khối này sau khi đọc hướng dẫn phía trên
 if (-not (Test-Path -LiteralPath .env)) { Copy-Item .env.example .env }
 notepad .env
 ```
@@ -116,11 +123,12 @@ notepad .env
 
 PowerShell không tự nạp `.env` vào `$env:`. Chạy nguyên khối sau; nó chỉ đọc cấu hình và kiểm tra, không gửi transaction. `ConvertFrom-StringData` đọc các dòng `KEY=value` và comment `#`, không thực thi nội dung file:
 
+Chạy nguyên khối nạp cấu hình và kiểm tra mạng/số dư. ACCOUNT chọn keystore; địa chỉ lấy được đặt vào REGISTRY_OWNER để truyền cho constructor. Chưa gọi registry hoặc gửi transaction.
+
 ```powershell
+# Chạy khối này sau khi đọc hướng dẫn phía trên
 & {
-    # Xóa owner cũ để không dùng nhầm nếu lần nạp mới thất bại.
     $env:REGISTRY_OWNER = $null
-    # Đọc KEY=value thành dữ liệu; không thực thi nội dung .env.
     $config = Get-Content -LiteralPath .env -Raw -ErrorAction Stop | ConvertFrom-StringData -ErrorAction Stop
     $env:SEPOLIA_RPC_URL = $config.SEPOLIA_RPC_URL
     $env:ETHERSCAN_API_KEY = $config.ETHERSCAN_API_KEY
@@ -130,14 +138,11 @@ PowerShell không tự nạp `.env` vào `$env:`. Chạy nguyên khối sau; nó
         throw 'Điền đủ SEPOLIA_RPC_URL, ETHERSCAN_API_KEY và ACCOUNT trong .env.'
     }
 
-    # Hỏi RPC về mạng, không gọi registry. Sepolia phải là 11155111.
     $chainId = cast chain-id --rpc-url $env:SEPOLIA_RPC_URL
     if ($LASTEXITCODE -ne 0 -or "$chainId".Trim() -ne '11155111') {
         throw 'RPC phải là Ethereum Sepolia (chain ID 11155111).'
     }
 
-    # Mở keystore ACCOUNT, lấy địa chỉ public; nhập mật khẩu khi hỏi.
-    # Địa chỉ này sẽ được truyền vào constructor(address initialOwner).
     $ownerAddress = cast wallet address --account $env:ACCOUNT
     if ($LASTEXITCODE -ne 0) { throw 'Không mở được keystore đã chọn bằng ACCOUNT.' }
     $ownerAddress = "$ownerAddress".Trim()
@@ -146,7 +151,6 @@ PowerShell không tự nạp `.env` vào `$env:`. Chạy nguyên khối sau; nó
     }
     $env:REGISTRY_OWNER = $ownerAddress
 
-    # Đọc số dư ETH của ví owner, không phải số dư contract; không gửi tiền.
     cast balance $env:REGISTRY_OWNER --ether --rpc-url $env:SEPOLIA_RPC_URL
     if ($LASTEXITCODE -ne 0) { throw 'Không đọc được số dư owner.' }
 }
@@ -158,15 +162,10 @@ Nhập mật khẩu keystore khi Cast hỏi. `REGISTRY_OWNER` được suy ra t�
 
 Lệnh sau **gửi transaction lên Sepolia khi bạn tự chạy**. Dùng `forge create` trên Windows như dự án mẫu. `--constructor-args` đặt cuối; chọn verifier Etherscan rõ ràng:
 
+Chạy riêng sau khi kiểm tra cấu hình. create gọi constructor(address initialOwner) với initialOwner = REGISTRY_OWNER. --account chọn ví ký/trả gas; --rpc-url/--chain chọn Sepolia; --broadcast gửi transaction; --verify/--verifier/--etherscan-api-key phục vụ verify source. --constructor-args đặt cuối lệnh.
+
 ```powershell
-# GỬI TRANSACTION DEPLOY: EVM chạy constructor(address initialOwner).
-# Đường dẫn trước dấu : là file Solidity, phía sau là tên contract.
-# --rpc-url: endpoint nhận transaction; --chain: chọn Sepolia.
-# --account: keystore ký và trả gas; mật khẩu được hỏi qua prompt.
-# --broadcast: thực sự gửi transaction tạo contract.
-# --verify/--verifier/--etherscan-api-key: verify SOURCE trên Etherscan.
-# --constructor-args: initialOwner, đặt cuối lệnh.
-# Chưa gọi registerDocument() hoặc verifyDocument() ở bước này.
+# Chạy khối này sau khi đọc hướng dẫn phía trên
 forge create src/ContractDocumentRegistry.sol:ContractDocumentRegistry `
     --rpc-url $env:SEPOLIA_RPC_URL `
     --chain sepolia `
@@ -180,8 +179,10 @@ forge create src/ContractDocumentRegistry.sol:ContractDocumentRegistry `
 
 Lưu `Deployed to` và `Transaction hash`. Địa chỉ contract khác địa chỉ owner:
 
+Thay placeholder bằng Deployed to rồi chạy riêng dòng gán địa chỉ contract, dùng cho phần test.
+
 ```powershell
-# Gán địa chỉ CONTRACT từ Deployed to, không dùng địa chỉ ví owner.
+# Chạy khối này sau khi đọc hướng dẫn phía trên
 $registryAddress = '0xDIA_CHI_CONTRACT_VUA_DEPLOY'
 ```
 
@@ -189,13 +190,12 @@ Tra transaction và tab Contract trên [Sepolia Etherscan](https://sepolia.ether
 
 Nếu deploy thành công nhưng verify source thất bại, **không deploy lại**. Dùng đúng địa chỉ contract, owner constructor và cấu hình compiler ban đầu:
 
+Chỉ chạy chung khối dưới khi deploy đã thành công nhưng verify source thất bại. abi-encode mã hóa initialOwner BAN ĐẦU; verify-contract nhận địa chỉ contract, source và constructor argument, --watch chờ explorer xử lý. Không gọi verifyDocument() hoặc deploy lại.
+
 ```powershell
-# Mã hóa constructor argument trên máy. Phải dùng owner BAN ĐẦU lúc deploy.
-# Nếu đã chuyển quyền owner, không dùng owner() hiện tại thay owner ban đầu.
+# Chạy khối này sau khi đọc hướng dẫn phía trên
 $constructorArgs = cast abi-encode 'constructor(address)' $env:REGISTRY_OWNER
 if ($LASTEXITCODE -ne 0) { throw 'Không encode được constructor.' }
-# Chỉ gửi yêu cầu verify source tới explorer; không deploy lại, không gọi verifyDocument().
-# --watch chờ explorer xử lý. Giữ đúng solc/EVM/optimizer khi deploy.
 forge verify-contract $registryAddress src/ContractDocumentRegistry.sol:ContractDocumentRegistry `
     --chain sepolia `
     --verifier etherscan `

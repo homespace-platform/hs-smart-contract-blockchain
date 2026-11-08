@@ -37,26 +37,30 @@ owner()(address)
 
 Nếu mở terminal mới, nạp lại RPC và tên keystore từ `.env`. Không cần Etherscan API key cho các bài test này. Thay địa chỉ mẫu bằng giá trị `Deployed to`, không dùng địa chỉ ví:
 
+Chạy chung phần nạp cấu hình và kiểm tra Sepolia. Gán địa chỉ contract ở khối riêng tiếp theo.
+
 ```powershell
-# Chọn thư mục có .env. Biến của terminal cũ không tự có trong terminal mới.
+# Nạp cấu hình và kiểm tra mạng
 Set-Location D:\Workspace\homespace\hs-smart-contract-blockchain
 
 & {
-    # Nạp cấu hình dạng dữ liệu, không thực thi .env.
     $config = Get-Content -LiteralPath .env -Raw -ErrorAction Stop | ConvertFrom-StringData -ErrorAction Stop
     $env:SEPOLIA_RPC_URL = $config.SEPOLIA_RPC_URL
     $env:ACCOUNT = $config.ACCOUNT
     if ([string]::IsNullOrWhiteSpace($env:SEPOLIA_RPC_URL) -or [string]::IsNullOrWhiteSpace($env:ACCOUNT)) {
         throw 'Điền SEPOLIA_RPC_URL và ACCOUNT trong .env.'
     }
-    # Hỏi RPC về chain ID; chưa gọi contract.
     $chainId = cast chain-id --rpc-url $env:SEPOLIA_RPC_URL
     if ($LASTEXITCODE -ne 0 -or "$chainId".Trim() -ne '11155111') {
         throw 'RPC phải là Ethereum Sepolia (chain ID 11155111).'
     }
 }
+```
 
-# Thay bằng Deployed to đã lưu, không dùng địa chỉ ví.
+Thay placeholder bằng Deployed to rồi chạy riêng dòng gán sau:
+
+```powershell
+# Chọn contract đã deploy
 $registryAddress = '0xDIA_CHI_CONTRACT_DA_DEPLOY'
 ```
 
@@ -66,12 +70,11 @@ Nếu có lỗi ở bước chuẩn bị, xử lý xong trước khi chạy ti�
 
 Các lệnh đọc không tốn gas:
 
+Chạy chung hai lệnh chỉ đọc: code nhận địa chỉ registry để đọc bytecode; call gọi owner() không có tham số và trả address. Kỳ vọng có bytecode và owner khớp ví có quyền ghi.
+
 ```powershell
-# CHỈ ĐỌC: không gọi hàm Solidity; xem địa chỉ có runtime bytecode chưa.
-# Kỳ vọng chuỗi dài 0x6080...; chỉ 0x là không có code trên mạng này.
+# Chạy khối này theo hướng dẫn phía trên
 cast code $registryAddress --rpc-url $env:SEPOLIA_RPC_URL
-# CHỈ ĐỌC: gọi owner() kế thừa từ OpenZeppelin Ownable, trả address.
-# Kỳ vọng khớp ví ACCOUNT có quyền ghi; không chạy constructor lại.
 cast call $registryAddress 'owner()(address)' --rpc-url $env:SEPOLIA_RPC_URL
 ```
 
@@ -83,34 +86,57 @@ cast call $registryAddress 'owner()(address)' --rpc-url $env:SEPOLIA_RPC_URL
 
 Chọn PDF thử nghiệm trên máy, tạo documentId **một lần** và lưu lại trước khi gửi. Giữ ID này khi kiểm tra/retry:
 
+### 3.1. Chọn PDF
+
+Thay đường dẫn và chạy riêng dòng gán. Chưa tính hash hoặc gọi Solidity.
+
 ```powershell
-# Chọn file thật; lệnh sau chỉ đọc file, không upload PDF lên chain.
+# Chọn PDF
 $pdfPath = 'D:\duong-dan\hop-dong-da-ky.pdf'
-# Tạo GUID ngẫu nhiên, hash bằng Keccak để được ID bytes32.
-# Không phải hash PDF. Chỉ chạy khi tạo proof MỚI; giữ ID cũ khi verify.
+```
+
+### 3.2. Chuẩn bị và lưu dữ liệu
+
+Chạy chung khối dưới một lần cho proof mới: keccak(GUID) tạo ID bytes32; Get-FileHash tính SHA-256 của PDF; JSON lưu metadata public để giữ ID/hash khi retry. Khối này chưa gọi Solidity. File JSON nằm trong thư mục repo, không chứa PDF, API key hoặc mật khẩu.
+
+```powershell
+# Tạo ID, hash và lưu metadata trên máy
 $documentId = cast keccak ([guid]::NewGuid().ToString())
 if ($LASTEXITCODE -ne 0) { throw 'Không tạo được documentId.' }
-# SHA-256 của đúng bytes file trên máy; thêm 0x để truyền bytes32.
-# Không dùng Keccak thay SHA-256 cho documentHash trong flow này.
 $documentHash = '0x' + (Get-FileHash -LiteralPath $pdfPath -Algorithm SHA256 -ErrorAction Stop).Hash.ToLowerInvariant()
 
-# Lưu documentId, documentHash và registryAddress trước khi gửi.
-# Lệnh này gửi transaction và tốn Sepolia ETH của owner.
-# Gọi registerDocument(documentId, documentHash), đúng thứ tự 2 tham số.
-# --account: ví ký lệnh phải là owner; --rpc-url/--chain: mạng Sepolia.
-# Không thêm --value: hàm này không nhận ETH, chỉ ví gửi trả gas.
+$proofFile = Join-Path (Get-Location) ("proof-{0}.json" -f $documentId)
+[ordered]@{
+    chainId = 11155111
+    registryAddress = $registryAddress
+    documentId = $documentId
+    documentHash = $documentHash
+} | ConvertTo-Json | Set-Content -LiteralPath $proofFile -Encoding UTF8
+```
+
+### 3.3. Gửi proof lên blockchain
+
+Dừng để kiểm tra đúng file, ID, hash và contract address trước khi chạy riêng khối tiếp theo.
+
+Gọi registerDocument(bytes32 documentId, bytes32 documentHash): truyền ID trước, hash sau. Chỉ owner được ghi, ID/hash phải khác zero và ID chưa tồn tại. --account chọn keystore ký/trả gas; --rpc-url/--chain chọn Sepolia. Không truyền --value vì hàm không nhận ETH.
+
+```powershell
+# Gửi transaction registerDocument thủ công
 cast send $registryAddress 'registerDocument(bytes32,bytes32)' $documentId $documentHash `
     --rpc-url $env:SEPOLIA_RPC_URL `
     --chain sepolia `
     --account $env:ACCOUNT
 if ($LASTEXITCODE -ne 0) { throw 'Gửi proof thất bại; đọc proof trước khi retry.' }
+```
 
-# CHỈ ĐỌC: getter tự sinh từ mapping public documents, key là documentId.
-# Trả hash rồi Unix timestamp giây; ID chưa có trả hash zero và timestamp 0.
+### 3.4. Đọc proof sau khi gửi thành công
+
+Chỉ chạy khối đọc sau khi receipt có status 1. Getter documents(documentId) trả (documentHash, registeredAt); verifyDocument(documentId, documentHash) trả bool, kỳ vọng true. Hai lệnh có thể chạy chung và không tốn gas.
+
+```powershell
+# Đọc proof và đối chiếu hash đã gửi
 cast call $registryAddress 'documents(bytes32)(bytes32,uint256)' $documentId `
     --rpc-url $env:SEPOLIA_RPC_URL
-# CHỈ ĐỌC: gọi verifyDocument(id, hash), trả bool true/false.
-# Không ghi hash mới và không thay đổi proof cũ.
 cast call $registryAddress 'verifyDocument(bytes32,bytes32)(bool)' $documentId $documentHash `
     --rpc-url $env:SEPOLIA_RPC_URL
 ```
@@ -169,13 +195,12 @@ Nếu CLI timeout sau khi gửi, đọc lại documents(id) trước khi retry. 
 
 Tính SHA-256 của một PDF khác/đã sửa rồi gọi `verifyDocument` với **cùng documentId**: kết quả phải là `false`. ID chưa tồn tại và hash zero cũng phải trả `false`:
 
+Chạy chung khối test ID chưa tồn tại: tạo unknownId chưa đăng ký, truyền unknownId và bytes32 zero cho verifyDocument(id, hash). Kỳ vọng false, không ghi proof.
+
 ```powershell
-# ID mới chỉ để test chưa tồn tại; không đăng ký ID này.
+# Chạy khối này theo hướng dẫn phía trên
 $unknownId = cast keccak ([guid]::NewGuid().ToString())
-# bytes32 zero: 0x và 64 ký tự 0.
 $zeroHash = '0x' + ('0' * 64)
-# CHỈ ĐỌC: gọi verifyDocument(id, hash), trả bool true/false.
-# Không ghi hash mới và không thay đổi proof cũ.
 cast call $registryAddress 'verifyDocument(bytes32,bytes32)(bool)' $unknownId $zeroHash `
     --rpc-url $env:SEPOLIA_RPC_URL
 ```
@@ -183,11 +208,12 @@ cast call $registryAddress 'verifyDocument(bytes32,bytes32)(bool)' $unknownId $z
 
 ### 4.1. Kiểm tra lại PDF hiện tại thay vì chỉ dùng biến hash cũ
 
+Chạy chung để tính lại SHA-256 của PDF hiện tại rồi gọi verifyDocument(documentId, currentHash). Giữ nguyên ID đã đăng ký; kết quả bool phải là true nếu bytes file không đổi.
+
 ```powershell
-# Tính lại từ file đang có trên máy; không tạo documentId mới.
+# Chạy khối này theo hướng dẫn phía trên
 $currentHash = '0x' + (Get-FileHash -LiteralPath $pdfPath -Algorithm SHA256 -ErrorAction Stop).Hash.ToLowerInvariant()
 
-# Gọi verifyDocument(id, currentHash); file gốc không đổi bytes -> true.
 cast call $registryAddress 'verifyDocument(bytes32,bytes32)(bool)' $documentId $currentHash --rpc-url $env:SEPOLIA_RPC_URL
 ```
 
@@ -197,27 +223,26 @@ Nếu chỉ truyền biến documentHash cũ, bạn chưa thực sự kiểm tra
 
 Chuẩn bị một PDF khác hoặc sửa một bản sao, giữ nguyên file gốc. Chỉ đổi tên file nhưng nội dung bytes không đổi thì hash vẫn giống và true là đúng.
 
+Thay đường dẫn PDF khác nội dung rồi chạy chung khối tính hash và đối chiếu. verifyDocument nhận ID cũ và otherHash; kỳ vọng false.
+
 ```powershell
-# Thay đường dẫn bằng PDF khác nội dung; không ghi đè bản gốc.
+# Chạy khối này theo hướng dẫn phía trên
 $otherPdfPath = 'D:\duong-dan\hop-dong-ban-sua.pdf'
 $otherHash = '0x' + (Get-FileHash -LiteralPath $otherPdfPath -Algorithm SHA256 -ErrorAction Stop).Hash.ToLowerInvariant()
 if ($otherHash -eq $documentHash) { throw 'Hai file cùng hash; chọn file khác nội dung.' }
 
-# CHỈ ĐỌC: verifyDocument cùng ID, hash khác -> kỳ vọng false.
 cast call $registryAddress 'verifyDocument(bytes32,bytes32)(bool)' $documentId $otherHash --rpc-url $env:SEPOLIA_RPC_URL
 ```
 
 ### 4.3. Mô phỏng đăng ký trùng, không gửi transaction bị revert
 
+Chạy chung mô phỏng: owner() trả địa chỉ sender, rồi cast call mô phỏng registerDocument(documentId, documentHash) với --from là owner. Kỳ vọng revert DocumentAlreadyRegistered. CALL không gửi transaction, không tốn gas; --from chỉ chọn sender mô phỏng, không cấp quyền gửi lệnh thật.
+
 ```powershell
-# Đọc owner hiện tại để chọn sender cho mô phỏng.
+# Chạy khối này theo hướng dẫn phía trên
 $currentOwner = cast call $registryAddress 'owner()(address)' --rpc-url $env:SEPOLIA_RPC_URL
 if ($LASTEXITCODE -ne 0) { throw 'Không đọc được owner.' }
 
-# Dùng CALL, không dùng send: mô phỏng registerDocument với ID đã có.
-# --from chỉ đặt sender cho mô phỏng, không ký hoặc cấp quyền gửi transaction thật.
-# Kỳ vọng revert DocumentAlreadyRegistered(documentId), CLI exit code khác 0.
-# Không lưu thay đổi và không tốn gas của một transaction bị revert.
 cast call $registryAddress 'registerDocument(bytes32,bytes32)' $documentId $documentHash `
     --from $currentOwner `
     --rpc-url $env:SEPOLIA_RPC_URL
@@ -230,30 +255,22 @@ Backend tích hợp sau cần lưu chain ID, registry address, documentId, SHA-2
 
 ## 6. Lưu metadata để kiểm tra lại ở terminal mới
 
-Lưu sau khi tạo ID/hash, trước khi đóng terminal. JSON chỉ chứa metadata public, không chứa PDF, API key hoặc mật khẩu. File được ghi vào thư mục repo, tên theo documentId; bạn giữ file này để tra cứu lại.
+JSON ở bước 3.2 đã lưu metadata public trước khi gửi proof. Giữ file đó để kiểm tra lại sau khi đóng terminal.
 
-```powershell
-# Chỉ lưu trên máy, không gọi hàm Solidity.
-$proofFile = Join-Path (Get-Location) ("proof-{0}.json" -f $documentId)
-[ordered]@{
-    chainId = 11155111
-    registryAddress = $registryAddress
-    documentId = $documentId
-    documentHash = $documentHash
-} | ConvertTo-Json | Set-Content -LiteralPath $proofFile -Encoding UTF8
-```
+Metadata đã được lưu ở bước 3.2 trước khi gửi transaction. Giữ file proof-ID.json trong thư mục repo; không cần tạo ID mới để lưu hoặc kiểm tra proof cũ.
 
 Lưu thêm transaction hash và block number từ receipt cùng hồ sơ này. Khi mở terminal mới, chạy bước 1 để nạp RPC/account rồi đọc file metadata:
 
+Thay đường dẫn JSON và PDF rồi chạy chung khối khôi phục biến. Chạy tiếp getter/verify, không tạo ID hoặc đăng ký lại.
+
 ```powershell
-# Thay bằng đường dẫn JSON đã lưu; không phải đường dẫn PDF.
+# Chạy khối này theo hướng dẫn phía trên
 $saved = Get-Content -LiteralPath 'D:\duong-dan\proof-ID.json' -Raw -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop
 if ($saved.chainId -ne 11155111) { throw 'Metadata không thuộc Sepolia.' }
 $registryAddress = $saved.registryAddress
 $documentId = $saved.documentId
 $documentHash = $saved.documentHash
 
-# Chọn lại PDF và chạy phần getter/verify; không tạo ID hoặc đăng ký lại.
 $pdfPath = 'D:\duong-dan\hop-dong-da-ky.pdf'
 ```
 
