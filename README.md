@@ -79,35 +79,41 @@ if (-not (Test-Path -LiteralPath .env)) { Copy-Item .env.example .env }
 notepad .env
 ```
 
-Điền ba giá trị, không có dấu nháy hay comment cuối dòng. `REGISTRY_OWNER` là địa chỉ public của ví `sepoliaKey`; flow này dùng cùng ví deploy và ghi proof. `.env` đã được gitignore.
+Điền `SEPOLIA_RPC_URL`, `ETHERSCAN_API_KEY` và `ACCOUNT=sepoliaKey`, không có dấu nháy hay comment cuối dòng. `ACCOUNT` là tên keystore đã import, không phải private key hoặc địa chỉ ví. Không cần khai báo `REGISTRY_OWNER` trong `.env`; bước dưới lấy địa chỉ public từ keystore và đặt biến này trong phiên PowerShell. `.env` đã được gitignore.
 
-PowerShell không tự nạp `.env` vào `$env:`. Đoạn sau chỉ nạp ba biến cho phép, không thực thi nội dung file:
+PowerShell không tự nạp `.env` vào `$env:`. Chạy nguyên khối sau; nó chỉ đọc cấu hình và kiểm tra, không gửi transaction. `ConvertFrom-StringData` đọc các dòng `KEY=value` và comment `#`, không thực thi nội dung file:
 
 ```powershell
-foreach ($line in Get-Content -LiteralPath .env) {
-    if ($line -match '^\s*(SEPOLIA_RPC_URL|ETHERSCAN_API_KEY|REGISTRY_OWNER)\s*=\s*(.*?)\s*$') {
-        [Environment]::SetEnvironmentVariable($Matches[1], $Matches[2], 'Process')
+& {
+    $env:REGISTRY_OWNER = $null
+    $config = Get-Content -LiteralPath .env -Raw -ErrorAction Stop | ConvertFrom-StringData -ErrorAction Stop
+    $env:SEPOLIA_RPC_URL = $config.SEPOLIA_RPC_URL
+    $env:ETHERSCAN_API_KEY = $config.ETHERSCAN_API_KEY
+    $env:ACCOUNT = $config.ACCOUNT
+
+    if ([string]::IsNullOrWhiteSpace($env:SEPOLIA_RPC_URL) -or [string]::IsNullOrWhiteSpace($env:ETHERSCAN_API_KEY) -or [string]::IsNullOrWhiteSpace($env:ACCOUNT)) {
+        throw 'Điền đủ SEPOLIA_RPC_URL, ETHERSCAN_API_KEY và ACCOUNT trong .env.'
     }
-}
 
-if (-not $env:SEPOLIA_RPC_URL -or -not $env:ETHERSCAN_API_KEY -or
-    $env:REGISTRY_OWNER -notmatch '^0x[0-9a-fA-F]{40}$' -or
-    $env:REGISTRY_OWNER -eq '0x0000000000000000000000000000000000000000') {
-    throw 'Điền đủ RPC URL, Etherscan API key và owner hợp lệ trong .env.'
-}
+    $chainId = cast chain-id --rpc-url $env:SEPOLIA_RPC_URL
+    if ($LASTEXITCODE -ne 0 -or "$chainId".Trim() -ne '11155111') {
+        throw 'RPC phải là Ethereum Sepolia (chain ID 11155111).'
+    }
 
-$chainId = cast chain-id --rpc-url $env:SEPOLIA_RPC_URL
-if ($LASTEXITCODE -ne 0 -or "$chainId".Trim() -ne '11155111') {
-    throw 'RPC phải là Ethereum Sepolia (chain ID 11155111).'
-}
+    $ownerAddress = cast wallet address --account $env:ACCOUNT
+    if ($LASTEXITCODE -ne 0) { throw 'Không mở được keystore đã chọn bằng ACCOUNT.' }
+    $ownerAddress = "$ownerAddress".Trim()
+    if ($ownerAddress -notmatch '^0x[0-9a-fA-F]{40}$' -or $ownerAddress -eq '0x0000000000000000000000000000000000000000') {
+        throw 'Cast chưa trả về địa chỉ owner hợp lệ.'
+    }
+    $env:REGISTRY_OWNER = $ownerAddress
 
-cast balance $env:REGISTRY_OWNER --ether --rpc-url $env:SEPOLIA_RPC_URL
-if ($LASTEXITCODE -ne 0) { throw 'Không đọc được số dư owner.' }
-cast wallet address --account sepoliaKey
-if ($LASTEXITCODE -ne 0) { throw 'Không mở được keystore.' }
+    cast balance $env:REGISTRY_OWNER --ether --rpc-url $env:SEPOLIA_RPC_URL
+    if ($LASTEXITCODE -ne 0) { throw 'Không đọc được số dư owner.' }
+}
 ```
 
-Địa chỉ keystore trả về phải khớp `REGISTRY_OWNER`. Nếu số dư bằng zero, nhận ETH **Sepolia** từ faucet trước khi deploy. Không gửi ETH mainnet.
+Nhập mật khẩu keystore khi Cast hỏi. `REGISTRY_OWNER` được suy ra từ đúng `ACCOUNT` dùng để deploy và ghi proof; địa chỉ này là thông tin public. Nếu khối trên báo lỗi, xử lý lỗi trước khi chạy bước deploy. Nếu số dư bằng zero, nhận ETH **Sepolia** từ faucet trước khi deploy. Không gửi ETH mainnet.
 
 ## 3. Tự deploy và verify source
 
@@ -117,7 +123,7 @@ Lệnh sau **gửi transaction lên Sepolia khi bạn tự chạy**. Dùng `forg
 forge create src/ContractDocumentRegistry.sol:ContractDocumentRegistry `
     --rpc-url $env:SEPOLIA_RPC_URL `
     --chain sepolia `
-    --account sepoliaKey `
+    --account $env:ACCOUNT `
     --broadcast `
     --verify `
     --verifier etherscan `
@@ -146,7 +152,7 @@ forge verify-contract $registryAddress src/ContractDocumentRegistry.sol:Contract
     --watch
 ```
 
-Repo cũng có `script/DeployContractDocumentRegistry.s.sol`: lấy `REGISTRY_OWNER` từ env, signer từ CLI, chỉ chấp nhận chain `31337`/`11155111`. Flow trên dùng `forge create`; không chạy thêm script để tránh deploy hai lần. Guard của script không bảo vệ `forge create`, nên luôn kiểm tra RPC Sepolia ở bước 2.
+Repo cũng có `script/DeployContractDocumentRegistry.s.sol`: lấy `REGISTRY_OWNER` đã suy ra từ keystore ở bước 2, signer từ CLI `--account $env:ACCOUNT`, chỉ chấp nhận chain `31337`/`11155111`. Flow trên dùng `forge create`; không chạy thêm script để tránh deploy hai lần. Guard của script không bảo vệ `forge create`, nên luôn kiểm tra RPC Sepolia ở bước 2.
 
 ## 4. Đọc contract và thử với PDF
 
@@ -170,7 +176,7 @@ $documentHash = '0x' + (Get-FileHash -LiteralPath $pdfPath -Algorithm SHA256 -Er
 cast send $registryAddress 'registerDocument(bytes32,bytes32)' $documentId $documentHash `
     --rpc-url $env:SEPOLIA_RPC_URL `
     --chain sepolia `
-    --account sepoliaKey
+    --account $env:ACCOUNT
 if ($LASTEXITCODE -ne 0) { throw 'Gửi proof thất bại; đọc proof trước khi retry.' }
 
 cast call $registryAddress 'documents(bytes32)(bytes32,uint256)' $documentId `
