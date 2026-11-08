@@ -153,6 +153,24 @@ logs                 [...]
 
 **Cách đọc:** `status 1` là transaction thực thi thành công. `logs` phải có event `DocumentRegistered` đúng ID/hash. `status 0` hoặc lỗi revert là thất bại; timeout cần kiểm tra proof/receipt trước khi retry.
 
+| Trường trong receipt | Hiểu đơn giản |
+|---|---|
+| `transactionHash` | Mã giao dịch để lưu lại và tra trên Etherscan. |
+| `from` / `to` | Ví ký và trả phí / địa chỉ registry được gọi (`$registryAddress`). |
+| `blockNumber` / `blockHash` | Số thứ tự / mã định danh block chứa giao dịch. |
+| `gasUsed` / `effectiveGasPrice` | Lượng gas đã dùng / giá mỗi đơn vị gas tính bằng wei. Nhân hai số ra phí giao dịch. |
+| `cumulativeGasUsed` | Tổng gas từ đầu block đến hết giao dịch này; không phải gas riêng bạn trả. |
+| `transactionIndex` | Vị trí giao dịch trong block, đếm từ 0. Ví dụ `50` là giao dịch thứ 51. |
+| `contractAddress` trống | Bình thường khi gọi contract có sẵn; trường này dùng khi tạo contract mới. |
+| `logs` | Sự kiện `DocumentRegistered`, chứa ID, hash, ví ghi nhận và thời điểm; không chứa PDF. |
+| `type: 2` | Giao dịch sử dụng cơ chế phí EIP-1559. |
+| `logsBloom` | Bộ lọc hỗ trợ tìm sự kiện; có thể bỏ qua khi kiểm tra thủ công. |
+| `root`, `blobGasPrice`, `blobGasUsed` trống | Các trường không áp dụng cho receipt/giao dịch này. |
+
+Ví dụ receipt của bạn: `241180 × 50000019 wei = 0.00001205900458242 ETH` phí gas. Trên Etherscan, **Value: 0 ETH** nghĩa là không chuyển ETH vào contract; ví vẫn trả phí gas bằng Sepolia ETH. **Block Confirmations** là số xác nhận Etherscan ghi nhận; **Timestamp** là thời gian block chứa giao dịch.
+
+Trong `logs`: `topics[0]` nhận diện loại sự kiện; `topics[1]`, `[2]`, `[3]` lần lượt là `documentId`, `documentHash`, `recorder` (ví được đệm đủ 32 byte); `data` chứa `registeredAt`. `logIndex` là vị trí sự kiện trong block, đếm từ 0; `removed: false` nghĩa là log chưa bị đánh dấu loại bỏ do tổ chức lại chuỗi. Thời điểm này không phải ngày ký PDF.
+
 ```powershell
 # Gửi transaction registerDocument thủ công
 cast send $registryAddress 'registerDocument(bytes32,bytes32)' $documentId $documentHash `
@@ -218,20 +236,6 @@ function verifyDocument(bytes32 documentId, bytes32 documentHash) external view 
 ```
 
 `view` không cập nhật dữ liệu. Kiểm tra storedHash khác zero khiến ID chưa tồn tại và hash zero vẫn trả false. Hash khớp chỉ đối chiếu commitment, không chứng minh danh tính người ký hay nội dung nghiệp vụ đúng.
-
-### Đọc receipt sau cast send
-
-| Trường | Ý nghĩa |
-|---|---|
-| status 1 (success) | Transaction thực thi thành công; status 0 là revert |
-| from / to | Ví gửi / địa chỉ registry nhận lời gọi |
-| transactionHash | Mã giao dịch để lưu và tra explorer |
-| blockNumber / blockHash | Block chứa transaction |
-| gasUsed / effectiveGasPrice | Gas thực dùng / đơn giá; tích hai số là phí thực thi tính bằng wei |
-| contractAddress trống | Bình thường: đang gọi contract có sẵn, không deploy contract mới |
-| logs | Event DocumentRegistered, không chứa PDF |
-
-Với event của registry này: topics[0] là chữ ký event; topics[1], [2], [3] lần lượt là documentId, documentHash, recorder (address được đệm lên 32 byte). data chứa registeredAt. Timestamp là thời điểm block ghi nhận, không phải ngày ký hoặc thời gian sửa file.
 
 Nếu CLI timeout sau khi gửi, đọc lại documents(id) trước khi retry. Cùng ID/hash đã có thì tiếp tục verify; khác hash thì dừng đối chiếu. Gửi lại cùng ID sẽ revert kể cả hash giống nhau.
 ## 4. Kiểm tra file khác và ID chưa tồn tại
