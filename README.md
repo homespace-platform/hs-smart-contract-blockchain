@@ -37,9 +37,20 @@ forge fmt --check
 Cấu hình giữ nguyên: Solidity `0.8.30`, EVM `cancun`, optimizer `200`. `foundry.lock` pin `forge-std v1.17.0` và `openzeppelin-contracts v5.7.0`. Chỉ khi clone mới và **thiếu** thư viện trong `lib/`, cài trước khi build:
 
 ```powershell
-forge install foundry-rs/forge-std@v1.17.0
-forge install OpenZeppelin/openzeppelin-contracts@v5.7.0
+forge install foundry-rs/forge-std@v1.17.0 --no-git
+forge install OpenZeppelin/openzeppelin-contracts@v5.7.0 --no-git
 ```
+
+Repo giữ thư viện dưới `lib/` dạng source local được gitignore; dùng `--no-git` để không tạo submodule mới.
+
+Nếu gặp `lib/forge-std already exists and is not a valid git repo`, kiểm tra source thay vì cài lại:
+
+```powershell
+Test-Path -LiteralPath lib/forge-std/src/Test.sol
+Test-Path -LiteralPath lib/openzeppelin-contracts/contracts/access/Ownable2Step.sol
+```
+
+Nếu cả hai trả `True` và `forge test --offline -vv` chạy được, bỏ qua bước install và tiếp tục. Thư mục thư viện có thể còn file `.git` trỏ tới metadata submodule không tồn tại; compiler vẫn dùng source bình thường. Không cần xóa thư viện để xử lý lỗi install này.
 
 Tests dùng EVM local của Forge, không gửi transaction testnet. Test deploy script chỉ mô phỏng chain ID, không phải deploy Sepolia.
 
@@ -52,6 +63,14 @@ Giống crowdfunding, import ví bằng prompt tương tác vào keystore mã h�
 ```powershell
 cast wallet import sepoliaKey --interactive
 ```
+
+Nếu Cast báo `Keystore file already exists .../sepoliaKey`, account đã tồn tại: không import lại hoặc ghi đè. Dùng account hiện có để lấy địa chỉ public:
+
+```powershell
+cast wallet address --account sepoliaKey
+```
+
+Nhập mật khẩu keystore khi được hỏi. Nếu không nhớ mật khẩu, giữ nguyên file keystore; chỉ tạo alias mới khi đã có ví testnet khác mà bạn kiểm soát.
 
 Chỉ nhập private key tại prompt của Cast; không đặt key trong `.env`, source hoặc lệnh CLI. Không commit keystore.
 
