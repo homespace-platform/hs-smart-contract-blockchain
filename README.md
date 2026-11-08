@@ -28,7 +28,7 @@ Chạy theo thứ tự, dùng PowerShell tại thư mục `hs-smart-contract-blo
 1. [Deploy lên Sepolia](DEPLOY.md): kiểm tra local, cấu hình `ACCOUNT`, deploy và verify source trên Etherscan.
 2. [Test sau khi deploy](POST_DEPLOY_TEST.md): kiểm tra bytecode/owner, ghi hash PDF và kiểm tra kết quả đúng/sai.
 
-Mỗi bước giải thích mục đích, hàm Solidity, tham số và kết quả trước khối PowerShell; trong khối chỉ giữ comment tổng quát. Các lệnh cùng bước được gom để chạy chung; phần nhập giá trị, gửi transaction và đọc kết quả được tách riêng. Tài liệu test có cách lưu proof để mở terminal mới kiểm tra lại.
+Mỗi bước giải thích mục đích, hàm Solidity, tham số và output dự kiến trước khối PowerShell; trong khối chỉ giữ comment tổng quát. Output có ví dụ minh họa, cách đọc kết quả và phân biệt lỗi với trường hợp thành công không in gì. Các lệnh cùng bước được gom để chạy chung; phần nhập giá trị, gửi transaction và đọc kết quả được tách riêng. Tài liệu test có cách lưu proof để mở terminal mới kiểm tra lại.
 
 Các lệnh `cast send` trong bài test gửi transaction và tốn Sepolia ETH. Các lệnh `cast code`/`cast call` chỉ đọc, không tốn gas.
 

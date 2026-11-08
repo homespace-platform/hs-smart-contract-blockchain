@@ -1,4 +1,6 @@
 # Test sau khi deploy ContractDocumentRegistry
+Các khối **Output dự kiến** mô tả kết quả khi bạn tự chạy, không phải log nghiệm thu mới. Địa chỉ, hash, timestamp và số dư trong ví dụ là minh họa; không copy chúng làm input. Khối gán biến/lưu file có thể thành công mà không in gì ra console.
+
 
 Dùng địa chỉ contract đã deploy ở [DEPLOY.md](DEPLOY.md). Tài liệu này không tạo contract mới. Phần ghi proof gửi transaction và tốn Sepolia ETH; phần đọc/đối chiếu không tốn gas.
 
@@ -39,6 +41,8 @@ Nếu mở terminal mới, nạp lại RPC và tên keystore từ `.env`. Không
 
 Chạy chung phần nạp cấu hình và kiểm tra Sepolia. Gán địa chỉ contract ở khối riêng tiếp theo.
 
+**Output dự kiến:** không in gì khi cấu hình hợp lệ vì chain ID được gán vào biến. Nếu thiếu biến hoặc RPC không thuộc Sepolia, khối ném thông báo lỗi và bạn dừng tại đây.
+
 ```powershell
 # Nạp cấu hình và kiểm tra mạng
 Set-Location D:\Workspace\homespace\hs-smart-contract-blockchain
@@ -59,6 +63,8 @@ Set-Location D:\Workspace\homespace\hs-smart-contract-blockchain
 
 Thay placeholder bằng Deployed to rồi chạy riêng dòng gán sau:
 
+**Output dự kiến:** không in gì; `$registryAddress` nhận địa chỉ contract đã có.
+
 ```powershell
 # Chọn contract đã deploy
 $registryAddress = '0xDIA_CHI_CONTRACT_DA_DEPLOY'
@@ -71,6 +77,15 @@ Nếu có lỗi ở bước chuẩn bị, xử lý xong trước khi chạy ti�
 Các lệnh đọc không tốn gas:
 
 Chạy chung hai lệnh chỉ đọc: code nhận địa chỉ registry để đọc bytecode; call gọi owner() không có tham số và trả address. Kỳ vọng có bytecode và owner khớp ví có quyền ghi.
+
+**Output dự kiến:** dòng bytecode dài rồi địa chỉ owner; giá trị dưới đây chỉ minh họa:
+
+```text
+0x60806040...
+0x1111111111111111111111111111111111111111
+```
+
+**Cách đọc:** kết quả lệnh đầu chỉ `0x` nghĩa là không có code tại địa chỉ trên mạng này. Dòng địa chỉ của lệnh thứ hai là ví có quyền ghi, không phải địa chỉ contract.
 
 ```powershell
 # Chạy khối này theo hướng dẫn phía trên
@@ -90,6 +105,8 @@ Chọn PDF thử nghiệm trên máy, tạo documentId **một lần** và lưu 
 
 Thay đường dẫn và chạy riêng dòng gán. Chưa tính hash hoặc gọi Solidity.
 
+**Output dự kiến:** không in gì; `$pdfPath` chỉ lưu đường dẫn. File chưa được đọc, chưa có ID/hash mới.
+
 ```powershell
 # Chọn PDF
 $pdfPath = 'D:\duong-dan\hop-dong-da-ky.pdf'
@@ -98,6 +115,8 @@ $pdfPath = 'D:\duong-dan\hop-dong-da-ky.pdf'
 ### 3.2. Chuẩn bị và lưu dữ liệu
 
 Chạy chung khối dưới một lần cho proof mới: keccak(GUID) tạo ID bytes32; Get-FileHash tính SHA-256 của PDF; JSON lưu metadata public để giữ ID/hash khi retry. Khối này chưa gọi Solidity. File JSON nằm trong thư mục repo, không chứa PDF, API key hoặc mật khẩu.
+
+**Output dự kiến:** console không in ID/hash vì chúng được gán vào biến. Khối tạo file `proof-<documentId>.json` trong thư mục repo, chứa `chainId`, `registryAddress`, `documentId`, `documentHash`. `chainId` phải là 11155111; hai giá trị ID/hash có dạng `0x` + 64 ký tự hex. Nếu file không tồn tại hoặc không đọc được, `Get-FileHash` báo lỗi; chưa gửi transaction.
 
 ```powershell
 # Tạo ID, hash và lưu metadata trên máy
@@ -120,6 +139,20 @@ Dừng để kiểm tra đúng file, ID, hash và contract address trước khi 
 
 Gọi registerDocument(bytes32 documentId, bytes32 documentHash): truyền ID trước, hash sau. Chỉ owner được ghi, ID/hash phải khác zero và ID chưa tồn tại. --account chọn keystore ký/trả gas; --rpc-url/--chain chọn Sepolia. Không truyền --value vì hàm không nhận ETH.
 
+**Output dự kiến:** prompt mật khẩu và transaction receipt, không phải giá trị trả về của hàm Solidity (hàm không khai báo `returns`). Receipt minh họa, các trường khác được lược bớt:
+
+```text
+Enter keystore password:
+blockNumber          12000000
+from                 0x1111111111111111111111111111111111111111
+to                   0x2222222222222222222222222222222222222222
+status               1 (success)
+transactionHash      0x3333333333333333333333333333333333333333333333333333333333333333
+logs                 [...]
+```
+
+**Cách đọc:** `status 1` là transaction thực thi thành công. `logs` phải có event `DocumentRegistered` đúng ID/hash. `status 0` hoặc lỗi revert là thất bại; timeout cần kiểm tra proof/receipt trước khi retry.
+
 ```powershell
 # Gửi transaction registerDocument thủ công
 cast send $registryAddress 'registerDocument(bytes32,bytes32)' $documentId $documentHash `
@@ -132,6 +165,16 @@ if ($LASTEXITCODE -ne 0) { throw 'Gửi proof thất bại; đọc proof trướ
 ### 3.4. Đọc proof sau khi gửi thành công
 
 Chỉ chạy khối đọc sau khi receipt có status 1. Getter documents(documentId) trả (documentHash, registeredAt); verifyDocument(documentId, documentHash) trả bool, kỳ vọng true. Hai lệnh có thể chạy chung và không tốn gas.
+
+**Output dự kiến:** ba dòng lần lượt là hash đã lưu, timestamp giây và kết quả verify; dữ liệu dưới đây chỉ minh họa:
+
+```text
+0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+1794121512 [1.794e9]
+true
+```
+
+**Cách đọc:** hash dòng đầu phải khớp `$documentHash`; dòng thứ hai là thời điểm block, phần trong ngoặc vuông là cách Cast hiển thị số lớn; dòng cuối `true` xác nhận ID/hash đang đối chiếu khớp. Getter của ID chưa tồn tại trả hash zero và timestamp 0.
 
 ```powershell
 # Đọc proof và đối chiếu hash đã gửi
@@ -197,6 +240,14 @@ Tính SHA-256 của một PDF khác/đã sửa rồi gọi `verifyDocument` vớ
 
 Chạy chung khối test ID chưa tồn tại: tạo unknownId chưa đăng ký, truyền unknownId và bytes32 zero cho verifyDocument(id, hash). Kỳ vọng false, không ghi proof.
 
+**Output dự kiến:** một giá trị bool:
+
+```text
+false
+```
+
+Điều này đúng ngay cả khi cả stored hash mặc định và hash truyền vào đều zero, vì `verifyDocument` yêu cầu proof đã tồn tại.
+
 ```powershell
 # Chạy khối này theo hướng dẫn phía trên
 $unknownId = cast keccak ([guid]::NewGuid().ToString())
@@ -209,6 +260,14 @@ cast call $registryAddress 'verifyDocument(bytes32,bytes32)(bool)' $unknownId $z
 ### 4.1. Kiểm tra lại PDF hiện tại thay vì chỉ dùng biến hash cũ
 
 Chạy chung để tính lại SHA-256 của PDF hiện tại rồi gọi verifyDocument(documentId, currentHash). Giữ nguyên ID đã đăng ký; kết quả bool phải là true nếu bytes file không đổi.
+
+**Output dự kiến:** một giá trị bool:
+
+```text
+true
+```
+
+Nếu trả `false`, bytes file hiện tại khác hash đã ghi hoặc bạn đang dùng sai ID/contract/network. Lỗi RPC/ABI là lỗi lệnh, không phải kết quả bool `false`.
 
 ```powershell
 # Chạy khối này theo hướng dẫn phía trên
@@ -225,6 +284,14 @@ Chuẩn bị một PDF khác hoặc sửa một bản sao, giữ nguyên file g�
 
 Thay đường dẫn PDF khác nội dung rồi chạy chung khối tính hash và đối chiếu. verifyDocument nhận ID cũ và otherHash; kỳ vọng false.
 
+**Output dự kiến:** một giá trị bool:
+
+```text
+false
+```
+
+Đây là kết quả mong đợi khi ID giữ nguyên nhưng hash khác. Nếu hai file có cùng hash, lệnh kiểm tra báo lỗi; dừng và chọn file khác nội dung trước khi tiếp tục gọi verify.
+
 ```powershell
 # Chạy khối này theo hướng dẫn phía trên
 $otherPdfPath = 'D:\duong-dan\hop-dong-ban-sua.pdf'
@@ -237,6 +304,14 @@ cast call $registryAddress 'verifyDocument(bytes32,bytes32)(bool)' $documentId $
 ### 4.3. Mô phỏng đăng ký trùng, không gửi transaction bị revert
 
 Chạy chung mô phỏng: owner() trả địa chỉ sender, rồi cast call mô phỏng registerDocument(documentId, documentHash) với --from là owner. Kỳ vọng revert DocumentAlreadyRegistered. CALL không gửi transaction, không tốn gas; --from chỉ chọn sender mô phỏng, không cấp quyền gửi lệnh thật.
+
+**Output dự kiến:** lỗi revert có tên hoặc selector tương ứng `DocumentAlreadyRegistered(bytes32)`. Ví dụ cách biểu diễn, phần ID phụ thuộc proof:
+
+```text
+Error: ... execution reverted: DocumentAlreadyRegistered(0x<documentId>)
+```
+
+CLI exit code khác 0 là **mong đợi ở bài test này**. Một số RPC chỉ trả dữ liệu revert dạng hex thay vì tên custom error. Proof cũ không đổi; vì dùng `cast call`, không có transaction mới hay phí gas bị trừ.
 
 ```powershell
 # Chạy khối này theo hướng dẫn phía trên
@@ -262,6 +337,8 @@ Metadata đã được lưu ở bước 3.2 trước khi gửi transaction. Gi�
 Lưu thêm transaction hash và block number từ receipt cùng hồ sơ này. Khi mở terminal mới, chạy bước 1 để nạp RPC/account rồi đọc file metadata:
 
 Thay đường dẫn JSON và PDF rồi chạy chung khối khôi phục biến. Chạy tiếp getter/verify, không tạo ID hoặc đăng ký lại.
+
+**Output dự kiến:** không in gì nếu JSON hợp lệ; các biến contract address, ID, hash và đường dẫn PDF được khôi phục trong terminal. Sau đó gọi getter/verify sẽ cho output như bước 3.4 và 4.1. Nếu chainId trong metadata khác 11155111, khối ném lỗi.
 
 ```powershell
 # Chạy khối này theo hướng dẫn phía trên

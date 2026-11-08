@@ -1,4 +1,6 @@
 # Deploy ContractDocumentRegistry lên Sepolia
+Các khối **Output dự kiến** mô tả kết quả khi bạn tự chạy, không phải log nghiệm thu mới. Địa chỉ, hash, timestamp và số dư trong ví dụ là minh họa; không copy chúng làm input. Khối gán biến/lưu file có thể thành công mà không in gì ra console.
+
 
 Hướng dẫn deploy thủ công bằng PowerShell, dùng Foundry, keystore `ACCOUNT`, Alchemy và Etherscan. Các lệnh có `--broadcast` chỉ được gửi khi bạn tự chạy.
 
@@ -49,6 +51,8 @@ Mở PowerShell tại repo đã có, không chạy lại `forge init`:
 
 Chạy chung khối kiểm tra local: xem phiên bản, build, test và format. Chưa deploy hoặc gửi transaction.
 
+**Output dự kiến:** in phiên bản Forge/Cast, thông báo compile và kết quả test pass/fail. `forge fmt --check` thường không in gì khi đạt. Chỉ tiếp tục nếu build/test/format đều thành công; số test và phiên bản phụ thuộc source/công cụ hiện tại.
+
 ```powershell
 # Chạy khối này sau khi đọc hướng dẫn phía trên
 Set-Location D:\Workspace\homespace\hs-smart-contract-blockchain
@@ -63,6 +67,8 @@ Cấu hình giữ nguyên: Solidity `0.8.30`, EVM `cancun`, optimizer `200`. `fo
 
 Chỉ chạy chung hai lệnh cài dependency nếu thiếu thư viện; tên repository và tag xác định phiên bản, --no-git không tạo submodule.
 
+**Output dự kiến:** thông báo tải/cài từng thư viện, tùy phiên bản Forge. Thành công khi lệnh kết thúc không lỗi và source dependency xuất hiện trong `lib/`. Không sinh địa chỉ contract.
+
 ```powershell
 # Chạy khối này sau khi đọc hướng dẫn phía trên
 forge install foundry-rs/forge-std@v1.17.0 --no-git
@@ -74,6 +80,13 @@ Repo giữ thư viện dưới `lib/` dạng source local được gitignore; d�
 Nếu gặp `lib/forge-std already exists and is not a valid git repo`, kiểm tra source thay vì cài lại:
 
 Chạy chung hai lệnh kiểm tra file; mỗi True nghĩa là source dependency tương ứng đã có.
+
+**Output dự kiến:** hai dòng ứng với hai file, theo đúng thứ tự lệnh:
+
+```text
+True
+True
+```
 
 ```powershell
 # Chạy khối này sau khi đọc hướng dẫn phía trên
@@ -93,6 +106,8 @@ Giống crowdfunding, import ví bằng prompt tương tác vào keystore mã h�
 
 Chạy riêng khi alias chưa có. wallet import nhận tên sepoliaKey; --interactive yêu cầu nhập private key và mật khẩu qua prompt. Không gọi Solidity.
 
+**Output dự kiến:** prompt yêu cầu private key rồi mật khẩu bảo vệ keystore; sau đó thông báo import thành công. Không có transaction hash hay địa chỉ contract. Nếu alias đã tồn tại, bỏ qua import và dùng keystore cũ.
+
 ```powershell
 # Chạy khối này sau khi đọc hướng dẫn phía trên
 cast wallet import sepoliaKey --interactive
@@ -101,6 +116,13 @@ cast wallet import sepoliaKey --interactive
 Nếu Cast báo `Keystore file already exists .../sepoliaKey`, account đã tồn tại: không import lại hoặc ghi đè. Dùng account hiện có để lấy địa chỉ public:
 
 Chạy riêng để lấy địa chỉ public từ alias sepoliaKey. Đây là thao tác keystore trên máy, không gọi owner() của registry.
+
+**Output dự kiến:** prompt mật khẩu và một địa chỉ public của ví (địa chỉ dưới đây chỉ minh họa):
+
+```text
+Enter keystore password:
+0x1111111111111111111111111111111111111111
+```
 
 ```powershell
 # Chạy khối này sau khi đọc hướng dẫn phía trên
@@ -113,6 +135,8 @@ Chỉ nhập private key tại prompt của Cast; không đặt key trong `.env`
 
 Chạy chung để tạo .env nếu thiếu và mở editor. Lưu file, đóng editor rồi mới sang bước nạp cấu hình.
 
+**Output dự kiến:** editor mở `.env`; console không cần in giá trị nào. Bạn lưu file với đủ ba biến rồi đóng editor trước khi tiếp tục.
+
 ```powershell
 # Chạy khối này sau khi đọc hướng dẫn phía trên
 if (-not (Test-Path -LiteralPath .env)) { Copy-Item .env.example .env }
@@ -124,6 +148,13 @@ notepad .env
 PowerShell không tự nạp `.env` vào `$env:`. Chạy nguyên khối sau; nó chỉ đọc cấu hình và kiểm tra, không gửi transaction. `ConvertFrom-StringData` đọc các dòng `KEY=value` và comment `#`, không thực thi nội dung file:
 
 Chạy nguyên khối nạp cấu hình và kiểm tra mạng/số dư. ACCOUNT chọn keystore; địa chỉ lấy được đặt vào REGISTRY_OWNER để truyền cho constructor. Chưa gọi registry hoặc gửi transaction.
+
+**Output dự kiến:** prompt mật khẩu keystore và số dư ví theo ETH, ví dụ dưới đây là 0.05 Sepolia ETH. Chain ID/địa chỉ owner được gán vào biến nên không tự in ra. Nếu lỗi kiểm tra, khối ném thông báo và dừng:
+
+```text
+Enter keystore password:
+0.05
+```
 
 ```powershell
 # Chạy khối này sau khi đọc hướng dẫn phía trên
@@ -164,6 +195,16 @@ Lệnh sau **gửi transaction lên Sepolia khi bạn tự chạy**. Dùng `forg
 
 Chạy riêng sau khi kiểm tra cấu hình. create gọi constructor(address initialOwner) với initialOwner = REGISTRY_OWNER. --account chọn ví ký/trả gas; --rpc-url/--chain chọn Sepolia; --broadcast gửi transaction; --verify/--verifier/--etherscan-api-key phục vụ verify source. --constructor-args đặt cuối lệnh.
 
+**Output dự kiến:** địa chỉ ví gửi, địa chỉ contract mới và transaction hash. Các giá trị sau chỉ minh họa; thông báo verify source có thể khác giữa các phiên bản Forge:
+
+```text
+Deployer: 0x1111111111111111111111111111111111111111
+Deployed to: 0x2222222222222222222222222222222222222222
+Transaction hash: 0x3333333333333333333333333333333333333333333333333333333333333333
+```
+
+**Cách đọc:** `Deployed to` là `$registryAddress`; `Transaction hash` dùng tra explorer. Constructor không trả về dữ liệu nghiệp vụ hoặc hash PDF. Nếu deploy đã thành công nhưng verification lỗi, giữ địa chỉ này và chỉ verify source lại.
+
 ```powershell
 # Chạy khối này sau khi đọc hướng dẫn phía trên
 forge create src/ContractDocumentRegistry.sol:ContractDocumentRegistry `
@@ -181,6 +222,8 @@ Lưu `Deployed to` và `Transaction hash`. Địa chỉ contract khác địa ch
 
 Thay placeholder bằng Deployed to rồi chạy riêng dòng gán địa chỉ contract, dùng cho phần test.
 
+**Output dự kiến:** không in gì; chỉ đặt `$registryAddress` trong phiên PowerShell. Không tạo contract hay gửi transaction.
+
 ```powershell
 # Chạy khối này sau khi đọc hướng dẫn phía trên
 $registryAddress = '0xDIA_CHI_CONTRACT_VUA_DEPLOY'
@@ -191,6 +234,8 @@ Tra transaction và tab Contract trên [Sepolia Etherscan](https://sepolia.ether
 Nếu deploy thành công nhưng verify source thất bại, **không deploy lại**. Dùng đúng địa chỉ contract, owner constructor và cấu hình compiler ban đầu:
 
 Chỉ chạy chung khối dưới khi deploy đã thành công nhưng verify source thất bại. abi-encode mã hóa initialOwner BAN ĐẦU; verify-contract nhận địa chỉ contract, source và constructor argument, --watch chờ explorer xử lý. Không gọi verifyDocument() hoặc deploy lại.
+
+**Output dự kiến:** thông báo tiến trình/kết quả verify source từ Etherscan. Chuỗi constructor được lưu vào `$constructorArgs`, không tự in. Thành công khi explorer báo source đã verified; không xuất hiện địa chỉ deploy mới. Nếu thất bại, đọc nguyên nhân từ verifier, không chạy deploy lại.
 
 ```powershell
 # Chạy khối này sau khi đọc hướng dẫn phía trên
