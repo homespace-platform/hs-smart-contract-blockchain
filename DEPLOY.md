@@ -257,6 +257,8 @@ Lưu địa chỉ contract (`Deployed to`), transaction hash, chain ID `11155111
 
 Tiếp tục [Test sau khi deploy](POST_DEPLOY_TEST.md). Không chạy lại lệnh deploy để kiểm tra contract đã có.
 
+Sau khi test thành công, cập nhật **`BLOCKCHAIN_REGISTRY_ADDRESS` của backend** bằng địa chỉ `Deployed to` vừa nhận và khởi động lại backend. ABI ghi proof của backend dùng `registerDocumentWithLineage`; địa chỉ registry cũ sẽ không tương thích. Các proof cũ trên registry cũ vẫn tra được ở địa chỉ cũ nếu bạn còn lưu lại; chúng không tự chuyển sang registry mới.
+
 ## Đọc kết quả và xử lý lỗi
 
 | Kết quả | Ý nghĩa / việc tiếp theo |

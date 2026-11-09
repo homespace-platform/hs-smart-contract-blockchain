@@ -12,7 +12,7 @@ Cú pháp bên dưới là **PowerShell**, không phải Bash/CMD. Chạy từng
 |---|---|---|
 | `cast code` | Đọc runtime bytecode, không gọi hàm Solidity | Không |
 | `cast call ... owner()` | `owner()` kế thừa từ OpenZeppelin Ownable | Không |
-| `cast send ... registerDocument(...)` | `registerDocument()` trong registry, chạy `onlyOwner` trước | Có |
+| `cast send ... registerDocumentWithLineage(...)` | Ghi hash, mã hồ sơ và loại văn bản; chạy `onlyOwner` trước | Có |
 | `cast call ... documents(...)` | Getter compiler tự sinh cho mapping public documents | Không |
 | `cast call ... verifyDocument(...)` | Hàm view verifyDocument trong registry | Không |
 | `Get-FileHash -Algorithm SHA256` | Hash bytes PDF trên máy, không gọi Solidity | Không |
@@ -122,6 +122,9 @@ Chạy chung khối dưới một lần cho proof mới: keccak(GUID) tạo ID b
 # Tạo ID, hash và lưu metadata trên máy
 $documentId = cast keccak ([guid]::NewGuid().ToString())
 if ($LASTEXITCODE -ne 0) { throw 'Không tạo được documentId.' }
+$caseId = cast keccak ([guid]::NewGuid().ToString())
+if ($LASTEXITCODE -ne 0) { throw 'Không tạo được caseId.' }
+$documentKind = 1 # HĐ cọc; dùng 2 cho HĐ thuê, 3 cho phụ lục của cùng caseId.
 $documentHash = '0x' + (Get-FileHash -LiteralPath $pdfPath -Algorithm SHA256 -ErrorAction Stop).Hash.ToLowerInvariant()
 
 $proofFile = Join-Path (Get-Location) ("proof-{0}.json" -f $documentId)
@@ -130,6 +133,8 @@ $proofFile = Join-Path (Get-Location) ("proof-{0}.json" -f $documentId)
     registryAddress = $registryAddress
     documentId = $documentId
     documentHash = $documentHash
+    caseId = $caseId
+    documentKind = $documentKind
 } | ConvertTo-Json | Set-Content -LiteralPath $proofFile -Encoding UTF8
 ```
 
@@ -137,7 +142,7 @@ $proofFile = Join-Path (Get-Location) ("proof-{0}.json" -f $documentId)
 
 Dừng để kiểm tra đúng file, ID, hash và contract address trước khi chạy riêng khối tiếp theo.
 
-Gọi registerDocument(bytes32 documentId, bytes32 documentHash): truyền ID trước, hash sau. Chỉ owner được ghi, ID/hash phải khác zero và ID chưa tồn tại. --account chọn keystore ký/trả gas; --rpc-url/--chain chọn Sepolia. Không truyền --value vì hàm không nhận ETH.
+Gọi `registerDocumentWithLineage(documentId, documentHash, caseId, documentKind)`: truyền ID file, SHA-256, mã hồ sơ, loại văn bản theo đúng thứ tự. Cùng hồ sơ dùng lại `$caseId` nhưng mỗi PDF ký đủ dùng `$documentId` mới. Chỉ owner được ghi; ID/hash/caseId phải khác zero, kind là 1–3. `--account` chọn keystore ký/trả gas; không truyền `--value`.
 
 **Output dự kiến:** prompt mật khẩu và transaction receipt, không phải giá trị trả về của hàm Solidity (hàm không khai báo `returns`). Receipt minh họa, các trường khác được lược bớt:
 
@@ -172,8 +177,8 @@ Ví dụ receipt của bạn: `241180 × 50000019 wei = 0.00001205900458242 ETH`
 Trong `logs`: `topics[0]` nhận diện loại sự kiện; `topics[1]`, `[2]`, `[3]` lần lượt là `documentId`, `documentHash`, `recorder` (ví được đệm đủ 32 byte); `data` chứa `registeredAt`. `logIndex` là vị trí sự kiện trong block, đếm từ 0; `removed: false` nghĩa là log chưa bị đánh dấu loại bỏ do tổ chức lại chuỗi. Thời điểm này không phải ngày ký PDF.
 
 ```powershell
-# Gửi transaction registerDocument thủ công
-cast send $registryAddress 'registerDocument(bytes32,bytes32)' $documentId $documentHash `
+# Gửi transaction có mã hồ sơ thủ công
+cast send $registryAddress 'registerDocumentWithLineage(bytes32,bytes32,bytes32,uint8)' $documentId $documentHash $caseId $documentKind `
     --rpc-url $env:SEPOLIA_RPC_URL `
     --chain sepolia `
     --account $env:ACCOUNT
@@ -184,15 +189,19 @@ if ($LASTEXITCODE -ne 0) { throw 'Gửi proof thất bại; đọc proof trướ
 
 Chỉ chạy khối đọc sau khi receipt có status 1. Getter documents(documentId) trả (documentHash, registeredAt); verifyDocument(documentId, documentHash) trả bool, kỳ vọng true. Hai lệnh có thể chạy chung và không tốn gas.
 
-**Output dự kiến:** ba dòng lần lượt là hash đã lưu, timestamp giây và kết quả verify; dữ liệu dưới đây chỉ minh họa:
+**Output dự kiến:** hash đã lưu, timestamp giây, kết quả verify, mã hồ sơ, loại văn bản, ID HĐ cọc và ID HĐ thuê; dữ liệu dưới đây minh họa cho `$documentKind = 1`:
 
 ```text
 0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 1794121512 [1.794e9]
 true
+0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+1
+0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+0x0000000000000000000000000000000000000000000000000000000000000000
 ```
 
-**Cách đọc:** hash dòng đầu phải khớp `$documentHash`; dòng thứ hai là thời điểm block, phần trong ngoặc vuông là cách Cast hiển thị số lớn; dòng cuối `true` xác nhận ID/hash đang đối chiếu khớp. Getter của ID chưa tồn tại trả hash zero và timestamp 0.
+**Cách đọc:** hash dòng đầu phải khớp `$documentHash`; dòng thứ hai là thời điểm block; dòng `true` xác nhận ID/hash khớp; dòng 4–5 phải khớp `$caseId` và `$documentKind`. Với kind 1, dòng 6 là `$documentId`, dòng 7 là zero vì chưa có HĐ thuê. Với kind 2, dòng 7 là `$documentId`; với kind 3, dòng 7 vẫn là ID HĐ thuê. Getter của ID chưa tồn tại trả zero.
 
 ```powershell
 # Đọc proof và đối chiếu hash đã gửi
@@ -200,6 +209,10 @@ cast call $registryAddress 'documents(bytes32)(bytes32,uint256)' $documentId `
     --rpc-url $env:SEPOLIA_RPC_URL
 cast call $registryAddress 'verifyDocument(bytes32,bytes32)(bool)' $documentId $documentHash `
     --rpc-url $env:SEPOLIA_RPC_URL
+cast call $registryAddress 'caseIds(bytes32)(bytes32)' $documentId --rpc-url $env:SEPOLIA_RPC_URL
+cast call $registryAddress 'documentKinds(bytes32)(uint8)' $documentId --rpc-url $env:SEPOLIA_RPC_URL
+cast call $registryAddress 'caseDeposits(bytes32)(bytes32)' $caseId --rpc-url $env:SEPOLIA_RPC_URL
+cast call $registryAddress 'caseLeases(bytes32)(bytes32)' $caseId --rpc-url $env:SEPOLIA_RPC_URL
 ```
 
 Kết quả phải là `true`.
@@ -208,7 +221,21 @@ Kết quả phải là `true`.
 ### Solidity xử lý lời gọi ghi proof như thế nào?
 
 ```solidity
-function registerDocument(bytes32 documentId, bytes32 documentHash) external onlyOwner {
+function registerDocumentWithLineage(bytes32 documentId, bytes32 documentHash,
+    bytes32 caseId, uint8 kind) external onlyOwner {
+    if (caseId == bytes32(0) || kind < 1 || kind > 3
+        || kind == 1 && caseDeposits[caseId] != bytes32(0)
+        || kind == 2 && caseLeases[caseId] != bytes32(0)
+        || kind == 3 && caseLeases[caseId] == bytes32(0)) revert InvalidLineage(caseId, kind);
+    _register(documentId, documentHash);
+    documentKinds[documentId] = kind;
+    caseIds[documentId] = caseId;
+    if (kind == 1) caseDeposits[caseId] = documentId;
+    if (kind == 2) caseLeases[caseId] = documentId;
+    emit DocumentLineageRegistered(caseId, documentId, kind);
+}
+
+function _register(bytes32 documentId, bytes32 documentHash) private {
     if (documentId == bytes32(0)) revert InvalidDocumentId();
     if (documentHash == bytes32(0)) revert InvalidDocumentHash();
     if (documents[documentId].documentHash != bytes32(0)) revert DocumentAlreadyRegistered(documentId);
@@ -218,7 +245,7 @@ function registerDocument(bytes32 documentId, bytes32 documentHash) external onl
 }
 ```
 
-Thứ tự: onlyOwner kiểm tra msg.sender → từ chối ID/hash zero → từ chối ID đã có → ghi mapping → phát event. Hàm không đọc PDF hoặc kiểm tra chữ ký SmartCA; owner cung cấp hash đầu vào.
+Thứ tự: `onlyOwner` kiểm tra ví → kiểm tra mã hồ sơ/loại văn bản → `_register` từ chối ID/hash zero hoặc trùng, ghi hash và phát event → lưu mã hồ sơ/loại văn bản. Nếu bất kỳ bước nào revert, toàn bộ transaction rollback. Contract không đọc PDF hoặc kiểm tra chữ ký SmartCA; owner cung cấp hash đầu vào.
 
 Getter `documents()` không có khai báo function riêng vì compiler tự sinh từ dòng:
 
@@ -307,7 +334,7 @@ cast call $registryAddress 'verifyDocument(bytes32,bytes32)(bool)' $documentId $
 
 ### 4.3. Mô phỏng đăng ký trùng, không gửi transaction bị revert
 
-Chạy chung mô phỏng: owner() trả địa chỉ sender, rồi cast call mô phỏng registerDocument(documentId, documentHash) với --from là owner. Kỳ vọng revert DocumentAlreadyRegistered. CALL không gửi transaction, không tốn gas; --from chỉ chọn sender mô phỏng, không cấp quyền gửi lệnh thật.
+Chạy chung mô phỏng: `owner()` trả địa chỉ sender, rồi `cast call` mô phỏng lại `registerDocumentWithLineage` với cùng bốn tham số. Kỳ vọng revert `DocumentAlreadyRegistered`. CALL không gửi transaction, không tốn gas; `--from` chỉ chọn sender mô phỏng.
 
 **Output dự kiến:** lỗi revert có tên hoặc selector tương ứng `DocumentAlreadyRegistered(bytes32)`. Ví dụ cách biểu diễn, phần ID phụ thuộc proof:
 
@@ -322,7 +349,7 @@ CLI exit code khác 0 là **mong đợi ở bài test này**. Một số RPC ch�
 $currentOwner = cast call $registryAddress 'owner()(address)' --rpc-url $env:SEPOLIA_RPC_URL
 if ($LASTEXITCODE -ne 0) { throw 'Không đọc được owner.' }
 
-cast call $registryAddress 'registerDocument(bytes32,bytes32)' $documentId $documentHash `
+cast call $registryAddress 'registerDocumentWithLineage(bytes32,bytes32,bytes32,uint8)' $documentId $documentHash $caseId $documentKind `
     --from $currentOwner `
     --rpc-url $env:SEPOLIA_RPC_URL
 ```
@@ -330,7 +357,7 @@ cast call $registryAddress 'registerDocument(bytes32,bytes32)' $documentId $docu
 Lỗi tại bài 4.3 là kết quả mong đợi. Đọc lại documents(id) phải thấy proof cũ không đổi.
 ## 5. Dữ liệu cần giữ cho bước tích hợp
 
-Backend tích hợp sau cần lưu chain ID, registry address, documentId, SHA-256, tx hash, block number và trạng thái xác nhận. Có tx hash chưa đủ: kiểm tra receipt thành công, đúng registry/event và proof on-chain, rồi xử lý độ xác nhận theo network. Job blockchain cần tách khỏi việc ký để RPC lỗi không làm mất hợp đồng đã ký.
+Backend lưu chain ID, registry address, documentId, SHA-256, caseId, documentKind, tx hash, block number và trạng thái xác nhận. Có tx hash chưa đủ: kiểm tra receipt thành công, đúng registry/event và proof on-chain, rồi xử lý độ xác nhận theo network. Job blockchain tách khỏi việc ký để RPC lỗi không làm mất hợp đồng đã ký.
 
 ## 6. Lưu metadata để kiểm tra lại ở terminal mới
 

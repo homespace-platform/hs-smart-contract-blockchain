@@ -2,6 +2,7 @@
 pragma solidity 0.8.30;
 
 import {Test} from "forge-std/Test.sol";
+import {Vm} from "forge-std/Vm.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {ContractDocumentRegistry} from "../src/ContractDocumentRegistry.sol";
 
@@ -98,6 +99,44 @@ contract ContractDocumentRegistryTest is Test {
         assertTrue(registry.verifyDocument(DOCUMENT_ID, expectedHash));
         assertTrue(registry.verifyDocument(secondId, secondHash));
         assertFalse(registry.verifyDocument(secondId, expectedHash));
+    }
+
+    function test_LineageGroupsDepositLeaseAndAmendment() public {
+        bytes32 leaseId = keccak256("lease");
+        bytes32 amendmentId = keccak256("amendment");
+        bytes32 caseId = keccak256("rental-case");
+        vm.startPrank(owner);
+        vm.recordLogs();
+        registry.registerDocumentWithLineage(DOCUMENT_ID, expectedHash, caseId, 1);
+        Vm.Log[] memory firstLogs = vm.getRecordedLogs();
+        assertEq(firstLogs.length, 2);
+        assertEq(firstLogs[1].topics[0], keccak256("DocumentLineageRegistered(bytes32,bytes32,uint8)"));
+        assertEq(firstLogs[1].topics[1], caseId);
+        assertEq(firstLogs[1].topics[2], DOCUMENT_ID);
+        registry.registerDocumentWithLineage(leaseId, sha256("lease-pdf"), caseId, 2);
+        registry.registerDocumentWithLineage(amendmentId, sha256("amendment-pdf"), caseId, 3);
+        vm.stopPrank();
+        assertEq(registry.caseIds(DOCUMENT_ID), caseId);
+        assertEq(registry.caseIds(leaseId), caseId);
+        assertEq(registry.caseIds(amendmentId), caseId);
+        assertEq(registry.documentKinds(amendmentId), 3);
+        assertEq(registry.caseDeposits(caseId), DOCUMENT_ID);
+        assertEq(registry.caseLeases(caseId), leaseId);
+    }
+
+    function test_RejectsMissingCaseOrWrongKind() public {
+        bytes32 leaseId = keccak256("lease");
+        vm.startPrank(owner);
+        vm.expectRevert(abi.encodeWithSelector(ContractDocumentRegistry.InvalidLineage.selector, bytes32(0), uint8(2)));
+        registry.registerDocumentWithLineage(leaseId, expectedHash, bytes32(0), 2);
+        vm.expectRevert(abi.encodeWithSelector(ContractDocumentRegistry.InvalidLineage.selector, DOCUMENT_ID, uint8(4)));
+        registry.registerDocumentWithLineage(leaseId, expectedHash, DOCUMENT_ID, 4);
+        vm.expectRevert(abi.encodeWithSelector(ContractDocumentRegistry.InvalidLineage.selector, DOCUMENT_ID, uint8(3)));
+        registry.registerDocumentWithLineage(leaseId, expectedHash, DOCUMENT_ID, 3);
+        registry.registerDocumentWithLineage(DOCUMENT_ID, expectedHash, DOCUMENT_ID, 2);
+        vm.expectRevert(abi.encodeWithSelector(ContractDocumentRegistry.InvalidLineage.selector, DOCUMENT_ID, uint8(2)));
+        registry.registerDocumentWithLineage(leaseId, expectedHash, DOCUMENT_ID, 2);
+        vm.stopPrank();
     }
 
     function test_OwnershipTransferRequiresAcceptanceAndKeepsProofs() public {

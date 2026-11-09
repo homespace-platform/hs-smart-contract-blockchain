@@ -21,17 +21,24 @@ contract ContractDocumentRegistry is Ownable2Step {
     error InvalidDocumentId();
     error InvalidDocumentHash();
     error DocumentAlreadyRegistered(bytes32 documentId);
+    error InvalidLineage(bytes32 caseId, uint8 kind);
 
     // Event để ứng dụng tra lịch sử: indexed đưa ID/hash/người ghi vào topics của log.
     // recorder là ví gửi transaction; registeredAt nằm trong phần data của log.
     event DocumentRegistered(
         bytes32 indexed documentId, bytes32 indexed documentHash, address indexed recorder, uint256 registeredAt
     );
+    event DocumentLineageRegistered(bytes32 indexed caseId, bytes32 indexed documentId, uint8 documentKind);
 
     // Key là mã riêng của tài liệu/phiên bản, không phải địa chỉ ví hoặc hash PDF.
     // public khiến compiler tự sinh documents(id) trả (documentHash, registeredAt).
     // ID chưa có trả hai giá trị zero; không có hàm cập nhật hoặc xóa proof đã ghi.
     mapping(bytes32 documentId => DocumentProof proof) public documents;
+    // 1 = HĐ cọc, 2 = HĐ thuê, 3 = phụ lục. Zero means legacy registration.
+    mapping(bytes32 documentId => uint8 kind) public documentKinds;
+    mapping(bytes32 documentId => bytes32 caseId) public caseIds;
+    mapping(bytes32 caseId => bytes32 depositDocumentId) public caseDeposits;
+    mapping(bytes32 caseId => bytes32 leaseDocumentId) public caseLeases;
 
     /// @param initialOwner Ví có quyền ghi proof, lấy từ keystore ACCOUNT khi deploy.
     // Constructor chỉ chạy lúc tạo contract; Ownable từ chối owner là địa chỉ zero.
@@ -42,6 +49,25 @@ contract ContractDocumentRegistry is Ownable2Step {
     /// @param documentHash SHA-256 của đúng bytes PDF cần chứng thực, được tính ngoài blockchain.
     // onlyOwner kiểm tra msg.sender trước khi chạy thân hàm; ví khác bị từ chối.
     function registerDocument(bytes32 documentId, bytes32 documentHash) external onlyOwner {
+        _register(documentId, documentHash);
+    }
+
+    /// @notice Ghi PDF đã ký và mã hồ sơ chung cho HĐ cọc, HĐ thuê và phụ lục.
+    function registerDocumentWithLineage(bytes32 documentId, bytes32 documentHash,
+        bytes32 caseId, uint8 kind) external onlyOwner {
+        if (caseId == bytes32(0) || kind < 1 || kind > 3
+            || kind == 1 && caseDeposits[caseId] != bytes32(0)
+            || kind == 2 && caseLeases[caseId] != bytes32(0)
+            || kind == 3 && caseLeases[caseId] == bytes32(0)) revert InvalidLineage(caseId, kind);
+        _register(documentId, documentHash);
+        documentKinds[documentId] = kind;
+        caseIds[documentId] = caseId;
+        if (kind == 1) caseDeposits[caseId] = documentId;
+        if (kind == 2) caseLeases[caseId] = documentId;
+        emit DocumentLineageRegistered(caseId, documentId, kind);
+    }
+
+    function _register(bytes32 documentId, bytes32 documentHash) private {
         // Không nhận zero để phân biệt rõ proof hợp lệ với phần tử mapping chưa tồn tại.
         if (documentId == bytes32(0)) revert InvalidDocumentId();
         if (documentHash == bytes32(0)) revert InvalidDocumentHash();
