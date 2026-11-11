@@ -5,7 +5,7 @@ import {Script} from "forge-std/Script.sol";
 import {ContractDocumentRegistry} from "../src/ContractDocumentRegistry.sol";
 
 // Script chạy bằng Forge trên máy, không phải registry lưu proof sau deploy.
-// Flow forge create trong DEPLOY.md tạo registry trực tiếp, không gọi run() ở đây.
+// Flow forge create trong CONTRACT_DOCUMENT_REGISTRY.md tạo registry trực tiếp, không gọi run() ở đây.
 contract DeployContractDocumentRegistry is Script {
     error UnsupportedChain(uint256 chainId);
 

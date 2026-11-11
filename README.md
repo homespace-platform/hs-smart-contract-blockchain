@@ -1,6 +1,6 @@
-# HomeSpace — Contract Document Registry
+# HomeSpace — Smart Contracts
 
-Ghi nhận và kiểm tra hash PDF hợp đồng đã ký, dùng stack quen thuộc từ crowdfunding: **Foundry + Solidity + OpenZeppelin + Sepolia + Alchemy + Etherscan**. Bạn tự chạy các lệnh trong tài liệu deploy và kiểm tra; repo không tự deploy.
+Registry ghi nhận hash PDF hợp đồng đã ký; EthPayment xử lý thanh toán gói hội viên bằng Sepolia ETH. Cả hai dùng **Foundry + Solidity + OpenZeppelin + Sepolia**. Bạn tự chạy các lệnh trong tài liệu triển khai và kiểm tra; repo không tự deploy.
 
 ## Contract và dữ liệu
 
@@ -30,8 +30,10 @@ Event `DocumentLineageRegistered` cho phép lọc các tài liệu theo `caseId`
 
 Chạy theo thứ tự, dùng PowerShell tại thư mục `hs-smart-contract-blockchain`:
 
-1. [Deploy lên Sepolia](DEPLOY.md): kiểm tra local, cấu hình `ACCOUNT`, deploy và verify source trên Etherscan.
-2. [Test sau khi deploy](POST_DEPLOY_TEST.md): kiểm tra bytecode/owner, ghi hash PDF và kiểm tra kết quả đúng/sai.
+1. [ContractDocumentRegistry](CONTRACT_DOCUMENT_REGISTRY.md): deploy, verify source, kiểm tra bytecode/owner và proof PDF sau deploy.
+2. [EthPayment](ETH_PAYMENT.md): deploy, kiểm tra contract, thử thanh toán và đối chiếu ABI.
+
+Hai contract có địa chỉ riêng; backend cấu hình từng địa chỉ bằng biến môi trường tương ứng.
 
 Mỗi bước giải thích mục đích, hàm Solidity, tham số và output dự kiến trước khối PowerShell; trong khối chỉ giữ comment tổng quát. Output có ví dụ minh họa, cách đọc kết quả và phân biệt lỗi với trường hợp thành công không in gì. Các lệnh cùng bước được gom để chạy chung; phần nhập giá trị, gửi transaction và đọc kết quả được tách riêng. Tài liệu test có cách lưu proof để mở terminal mới kiểm tra lại.
 
@@ -43,6 +45,6 @@ Các lệnh `cast send` trong bài test gửi transaction và tốn Sepolia ETH.
 - Đổi ví bằng `transferOwnership(newOwner)`, sau đó ví mới gọi `acceptOwnership()`. Proof cũ giữ nguyên; owner cũ mất quyền ghi khi owner mới chấp nhận.
 - **Không gọi `renounceOwnership()`**: hàm OpenZeppelin kế thừa này đặt owner bằng zero và vĩnh viễn ngừng ghi proof mới; proof cũ vẫn đọc được.
 - Không lưu PII, PDF hoặc URL private trên public chain. Hash không chứng minh quyền sở hữu nhà, tiền đã chuyển hoặc giá trị pháp lý của hợp đồng; vẫn cần kiểm tra chữ ký số.
-- Backend dùng `registerDocumentWithLineage` cho PDF ký đủ sau khi cấu hình **địa chỉ registry mới**. Registry cũ không hỗ trợ ABI này; phải deploy lại rồi cập nhật `BLOCKCHAIN_REGISTRY_ADDRESS` thủ công. Không có escrow hay thanh toán crypto.
+- Backend dùng `registerDocumentWithLineage` cho PDF ký đủ sau khi cấu hình **địa chỉ registry mới**. Registry cũ không hỗ trợ ABI này; phải deploy lại rồi cập nhật `CONTRACT_DOCUMENT_REGISTRY_ADDRESS` thủ công. Registry không giữ ETH; thanh toán gói hội viên dùng `EthPayment` riêng.
 
 Tài liệu: [Foundry](https://getfoundry.sh/), [OpenZeppelin access control](https://docs.openzeppelin.com/contracts/5.x/access-control), [Ethereum networks](https://ethereum.org/en/developers/docs/networks/), [Etherscan verification](https://docs.etherscan.io/contract-verification/verify-with-foundry).
