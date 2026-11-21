@@ -1,14 +1,12 @@
 # HomeSpace Smart Contracts — Agent Instructions
 
-<!-- BEGIN: HomeSpace engineering standards -->
-## HomeSpace engineering standards
+## Engineering standards
 
 - Preserve business invariants, public contracts and backward compatibility. Keep authentication, authorization, input validation and error handling intact.
 - Protect secrets and sensitive data in code, commits, tests, logs and reports. Treat third-party hooks as untrusted until reviewed and explicitly authorized.
 - Change production configuration, deploy or run destructive data operations only when explicitly authorized for the target environment.
 - Keep review tasks read-only unless the developer requests fixes.
 - Run targeted verification first. Broaden coverage when the risk or affected interfaces warrant it. Report checks that ran and any unverified behavior.
-<!-- END: HomeSpace engineering standards -->
 
 ## Scope
 
@@ -17,7 +15,7 @@ Solidity 0.8.30 contracts built and tested with Foundry (`foundry.toml`, EVM `ca
 - `src/ContractDocumentRegistry.sol`: owner-only registry of document proofs (`documentId` → SHA-256 `documentHash` + `registeredAt`) with case lineage (`caseId`, `documentKind`: 1 deposit, 2 lease, 3 annex). `Ownable2Step`.
 - `src/EthPayment.sol`: ETH membership payment. Pays a backend-signed EIP-712 quote (`pay`), one-time `paymentId`, `quoteSigner` set by owner. `Ownable2Step`, `ReentrancyGuard`.
 
-Read `README.md` for the registry data model. `CONTRACT_DOCUMENT_REGISTRY.md` and `ETH_PAYMENT.md` are deployment and manual-test guides; read them only for deployment or ABI questions. The backend (`hs-core-api`) consumes these ABIs and configured addresses.
+Read `README.md` for the registry data model. `CONTRACT_DOCUMENT_REGISTRY.md` and `ETH_PAYMENT.md` are deployment and manual-test guides; read them only for deployment or ABI questions. Backend consumers rely on these ABIs and configured addresses.
 
 ## Smart Contract Safety
 
