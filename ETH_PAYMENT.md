@@ -86,18 +86,18 @@ Sau khi hoàn tất, kiểm tra tab **Contract → Code** trên trang địa ch�
 Trong **`D:\Workspace\homespace\hs-core-api\.env`** (file local, không commit), điền:
 
 ```dotenv
-MEMBERSHIP_ETH_PAYMENT_RPC_URL=<cùng RPC Sepolia đã kiểm tra ở bước 2>
-MEMBERSHIP_ETH_PAYMENT_CONTRACT_ADDRESS=<Deployed to của EthPayment>
-MEMBERSHIP_ETH_PAYMENT_QUOTE_SIGNER_PRIVATE_KEY=<private key của ví ACCOUNT/HomeSpace>
-MEMBERSHIP_ETH_PAYMENT_RECIPIENT_ADDRESS=<địa chỉ công khai $ownerAddress của cùng ví>
+PAYMENT_ETH_RPC_URL=<cùng RPC Sepolia đã kiểm tra ở bước 2>
+PAYMENT_ETH_CONTRACT_ADDRESS=<Deployed to của EthPayment>
+PAYMENT_ETH_QUOTE_SIGNER_PRIVATE_KEY=<private key của ví ACCOUNT/HomeSpace>
+PAYMENT_ETH_RECIPIENT_ADDRESS=<địa chỉ công khai $ownerAddress của cùng ví>
 ```
 
 | Biến | Điền gì? |
 |---|---|
-| `MEMBERSHIP_ETH_PAYMENT_RPC_URL` | RPC **Sepolia**, cùng mạng đã dùng để deploy. |
-| `MEMBERSHIP_ETH_PAYMENT_CONTRACT_ADDRESS` | Địa chỉ **contract EthPayment** từ dòng `Deployed to`. Đây không phải địa chỉ ví nhận tiền; backend dùng nó để kiểm tra giao dịch và event. |
-| `MEMBERSHIP_ETH_PAYMENT_QUOTE_SIGNER_PRIVATE_KEY` | **Private key của ví HomeSpace** tương ứng `$ownerAddress`. Backend ký báo giá bằng key này; địa chỉ suy ra phải khớp `quoteSigner()` trên contract. |
-| `MEMBERSHIP_ETH_PAYMENT_RECIPIENT_ADDRESS` | **Địa chỉ công khai của cùng ví HomeSpace** (`$ownerAddress`). Khi **chủ nhà mua gói hội viên** bằng MetaMask của họ, contract chuyển Sepolia ETH đến địa chỉ này. |
+| `PAYMENT_ETH_RPC_URL` | RPC **Sepolia**, cùng mạng đã dùng để deploy. |
+| `PAYMENT_ETH_CONTRACT_ADDRESS` | Địa chỉ **contract EthPayment** từ dòng `Deployed to`. Đây không phải địa chỉ ví nhận tiền; backend dùng nó để kiểm tra giao dịch và event. |
+| `PAYMENT_ETH_QUOTE_SIGNER_PRIVATE_KEY` | **Private key của ví HomeSpace** tương ứng `$ownerAddress`. Backend ký báo giá bằng key này; địa chỉ suy ra phải khớp `quoteSigner()` trên contract. |
+| `PAYMENT_ETH_RECIPIENT_ADDRESS` | **Địa chỉ công khai của cùng ví HomeSpace** (`$ownerAddress`). Khi **chủ nhà mua gói hội viên** bằng MetaMask của họ, contract chuyển Sepolia ETH đến địa chỉ này. |
 
 Các tên cũ `RENTAL_ETH_PAYMENT_*` không dùng trong luồng hội viên. Ví chủ nhà là **ví trả tiền**; contract là nơi kiểm tra chữ ký và chuyển tiền; ví HomeSpace ở `RECIPIENT_ADDRESS` là **ví nhận tiền**. Không điền địa chỉ contract vào `RECIPIENT_ADDRESS`.
 
